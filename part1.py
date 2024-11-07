@@ -2,10 +2,7 @@ from openai import OpenAI
 from duckduckgo_search import DDGS
 import re
 
-client = OpenAI(
-    api_key='Empty',
-    base_url='http://127.0.0.1:11434/v1'
-)
+client = OpenAI(api_key="Empty", base_url="http://127.0.0.1:11434/v1")
 
 
 def search(query, max_results=10):
@@ -56,7 +53,7 @@ def run_agent(prompt, system_prompt):
     # Prepare the initial message
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt}
+        {"role": "user", "content": prompt},
     ]
 
     previous_searches = set()  # Track previous search queries to avoid repetition
@@ -81,15 +78,19 @@ def run_agent(prompt, system_prompt):
                 print("Repeated search detected. Stopping to prevent infinite loop.")
                 break
 
-            print(f"================ Performing search for: {search_query} ================")
+            print(
+                f"================ Performing search for: {search_query} ================"
+            )
             observation = search(search_query)
             print("================ Search completed !! ================")
             previous_searches.add(search_query)  # Add to the set of performed searches
 
-            messages.extend([
-                {"role": "system", "content": response_text},
-                {"role": "user", "content": f"Observation: {observation}"},
-            ])
+            messages.extend(
+                [
+                    {"role": "system", "content": response_text},
+                    {"role": "user", "content": f"Observation: {observation}"},
+                ]
+            )
 
         elif action[-1] == "Response To Human":
             print(f"Response: {action_input[-1]}")
@@ -103,7 +104,4 @@ def run_agent(prompt, system_prompt):
     return action_input[-1]
 
 
-response = run_agent(
-    prompt="Hi",
-    system_prompt=System_prompt
-)
+response = run_agent(prompt="Hi", system_prompt=System_prompt)

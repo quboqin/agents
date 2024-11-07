@@ -23,10 +23,12 @@ async def fetch(session, url, headers, params=None):
         return await response.text()
 
 
-async def fetch_page(session, params, page_num, results, total_results_to_fetch, headers):
+async def fetch_page(
+    session, params, page_num, results, total_results_to_fetch, headers
+):
     params["start"] = (page_num - 1) * params["num"]
     html = await fetch(session, "https://www.google.com/search", headers, params)
-    soup = BeautifulSoup(html, 'html.parser')
+    soup = BeautifulSoup(html, "html.parser")
 
     for result in soup.select(".tF2Cxc"):
         if len(results) >= total_results_to_fetch:
@@ -34,10 +36,7 @@ async def fetch_page(session, params, page_num, results, total_results_to_fetch,
         title = result.select_one(".DKV0Md").text
         links = result.select_one(".yuRUbf a")["href"]
 
-        results.append({
-            "title": title,
-            "links": links
-        })
+        results.append({"title": title, "links": links})
 
 
 async def fetch_content(session, url, headers):
@@ -53,38 +52,40 @@ async def fetch_all_content(urls, headers):
 
 def get_all_text_from_url(url, headers):
     response = requests.get(url, headers=headers, timeout=30)
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(response.text, "html.parser")
     for script in soup(["script", "style"]):
         script.extract()
     text = soup.get_text()
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = '\n'.join(chunk for chunk in chunks if chunk)
+    text = "\n".join(chunk for chunk in chunks if chunk)
     return text
 
 
 def split_text_into_chunks(text, chunk_size):
-    sentences = re.split(r'(?<=[.!?]) +', text)
+    sentences = re.split(r"(?<=[.!?]) +", text)
     chunks = []
     current_chunk = []
 
     for sentence in sentences:
         if sum(len(s) for s in current_chunk) + len(sentence) + 1 > chunk_size:
-            chunks.append(' '.join(current_chunk))
+            chunks.append(" ".join(current_chunk))
             current_chunk = [sentence]
         else:
             current_chunk.append(sentence)
 
     if current_chunk:
-        chunks.append(' '.join(current_chunk))
+        chunks.append(" ".join(current_chunk))
 
     return chunks
 
 
 async def process_text_content(texts, chunk_size):
     loop = asyncio.get_event_loop()
-    tasks = [loop.run_in_executor(None, split_text_into_chunks, text, chunk_size)
-             for text in texts]
+    tasks = [
+        loop.run_in_executor(None, split_text_into_chunks, text, chunk_size)
+        for text in texts
+    ]
     return await asyncio.gather(*tasks)
 
 
@@ -97,18 +98,23 @@ vector_store = Chroma(
 chunk_size = 1024  # size of each text chunk
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 "
-                 "(KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 }
 
 
-async def fetch_and_process_data(search_query, chunk_size=chunk_size, headers=headers,
-                               n_result_per_page=3, total_results_to_fetch=3):
+async def fetch_and_process_data(
+    search_query,
+    chunk_size=chunk_size,
+    headers=headers,
+    n_result_per_page=3,
+    total_results_to_fetch=3,
+):
     params = {
         "q": search_query,  # query example
-        "hl": "en",         # language
-        "gl": "uk",         # country of the search, UK -> United Kingdom
-        "start": 0,         # number page by default up to 0
-        "num": n_result_per_page  # maximum number of results per page
+        "hl": "en",  # language
+        "gl": "uk",  # country of the search, UK -> United Kingdom
+        "start": 0,  # number page by default up to 0
+        "num": n_result_per_page,  # maximum number of results per page
     }
 
     async with aiohttp.ClientSession() as session:
@@ -116,16 +122,19 @@ async def fetch_and_process_data(search_query, chunk_size=chunk_size, headers=he
         results = []
         while len(results) < total_results_to_fetch:
             page_num += 1
-            await fetch_page(session, params, page_num, results,
-                           total_results_to_fetch, headers)
+            await fetch_page(
+                session, params, page_num, results, total_results_to_fetch, headers
+            )
 
-        urls = [result['links'] for result in results]
+        urls = [result["links"] for result in results]
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             loop = asyncio.get_event_loop()
             texts = await asyncio.gather(
-                *[loop.run_in_executor(executor, get_all_text_from_url, url, headers)
-                  for url in urls]
+                *[
+                    loop.run_in_executor(executor, get_all_text_from_url, url, headers)
+                    for url in urls
+                ]
             )
 
         chunks_list = await process_text_content(texts, chunk_size)
@@ -133,13 +142,12 @@ async def fetch_and_process_data(search_query, chunk_size=chunk_size, headers=he
         documents = []
         for i, result in enumerate(results):
             for j, chunk in enumerate(chunks_list[i]):
-                documents.append(Document(
-                    page_content=chunk,
-                    metadata={
-                        'source': result['links'],
-                        'title': result['title']
-                    }
-                ))
+                documents.append(
+                    Document(
+                        page_content=chunk,
+                        metadata={"source": result["links"], "title": result["title"]},
+                    )
+                )
         vector_store.add_documents(documents=documents)
 
     return documents
@@ -149,31 +157,29 @@ def web_search(search_query: str):
     async def run_search():
         await fetch_and_process_data(search_query)
         results_ = vector_store.as_retriever().invoke(search_query)
-        result_text = " ".join([results_[i].page_content
-                              for i in range(len(results_))])
+        result_text = " ".join([results_[i].page_content for i in range(len(results_))])
         return result_text
 
     return asyncio.run(run_search())
 
+    class RouteQuery(BaseModel):
+        """Route a user query to the most relevant datasource."""
 
-class RouteQuery(BaseModel):
-    """Route a user query to the most relevant datasource."""
-
-    response_mode: Literal["chat", "websearch"] = Field(
-        ...,
-        description="Decide whether to respond via chat mode or perform a web search.",
-    )
+        response_mode: Literal["chat", "websearch"] = Field(
+            ...,
+            description="Decide whether to respond via chat mode or perform a web search.",
+        )
 
 
 def router(query):
     router_prompt = """
-    You are an expert at determining how to respond to a user's question. 
-    - **Chat**: Use this response for general inquiries, FAQs, and straightforward 
+    You are an expert at determining how to respond to a user's question.
+    - **Chat**: Use this response for general inquiries, FAQs, and straightforward
       questions that can be answered with your existing knowledge.
-    - **Websearch**: Use this response for more complex, real-time, or niche information 
+    - **Websearch**: Use this response for more complex, real-time, or niche information
       requests that require specific data or up-to-date information beyond your knowledge.
 
-    Respond with only one word: "chat" if you can answer directly, or "websearch" if the 
+    Respond with only one word: "chat" if you can answer directly, or "websearch" if the
     question needs further research.
     """
     router_client = instructor.from_openai(
@@ -194,7 +200,7 @@ def router(query):
             {
                 "role": "user",
                 "content": query,
-            }
+            },
         ],
         response_model=RouteQuery,
     )
@@ -210,18 +216,17 @@ class OllamaChatCompletion:
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
-    def generate(self, messages: List[str], tools: List[Dict[str, Any]] = None,
-                **kwargs) -> Dict[str, Any]:
+    def generate(
+        self, messages: List[str], tools: List[Dict[str, Any]] = None, **kwargs
+    ) -> Dict[str, Any]:
         """Generates a response from OpenAI's API."""
-        params = {'messages': messages, 'model': self.model, 'tools': tools, **kwargs}
+        params = {"messages": messages, "model": self.model, "tools": tools, **kwargs}
         response = self.client.chat.completions.create(**params)
         return response.choices[0].message
 
 
 llm = OllamaChatCompletion(
-    api_key='Empty',
-    base_url='http://127.0.0.1:11434/v1',
-    model="llama3.1"
+    api_key="Empty", base_url="http://127.0.0.1:11434/v1", model="llama3.1"
 )
 
 
@@ -260,7 +265,7 @@ class AgentTool:
         self.func = func
         self.args_model = args_model
         self.name = func.__name__
-        self.description = func.__doc__ or self.args_schema.get('description', '')
+        self.description = func.__doc__ or self.args_schema.get("description", "")
 
     def to_openai_function_call_definition(self) -> dict:
         """Converts the tool to OpenAI Function Calling format."""
@@ -271,8 +276,8 @@ class AgentTool:
             "function": {
                 "name": self.name,
                 "description": description,
-                "parameters": schema_dict
-            }
+                "parameters": schema_dict,
+            },
         }
 
     @property
@@ -293,7 +298,8 @@ class AgentTool:
     def run(self, *args, **kwargs) -> Any:
         """Execute the function with validated arguments."""
         try:
-            # Handle positional arguments by converting them to keyword arguments
+            # Handle positional arguments by converting them to keyword
+            # arguments
             if args:
                 sig = signature(self.func)
                 arg_names = list(sig.parameters.keys())
@@ -304,10 +310,12 @@ class AgentTool:
             return self.func(**validated_args.model_dump())
         except ValidationError as e:
             raise ValueError(
-                f"Argument validation failed for tool '{self.name}': {str(e)}")
+                f"Argument validation failed for tool '{self.name}': {str(e)}"
+            )
         except Exception as e:
             raise ValueError(
-                f"An error occurred during the execution of tool '{self.name}': {str(e)}")
+                f"An error occurred during the execution of tool '{self.name}': {str(e)}"
+            )
 
     def __call__(self, *args, **kwargs) -> Any:
         """Allow the AgentTool instance to be called like a regular function."""
@@ -349,7 +357,7 @@ class AgentToolExecutor:
             f"{tool.name}: {tool.description} Args schema: {tool.args_schema['properties']}"
             for tool in self.tools.values()
         ]
-        return '\n'.join(tools_info)
+        return "\n".join(tools_info)
 
 
 logger = logging.getLogger(__name__)
@@ -358,8 +366,13 @@ logger = logging.getLogger(__name__)
 class Agent:
     """Integrates LLM client, tools, memory, and manages tool executions."""
 
-    def __init__(self, llm_client, system_message: Dict[str, str],
-                 max_iterations: int = 10, tools: Optional[List[AgentTool]] = None):
+    def __init__(
+        self,
+        llm_client,
+        system_message: Dict[str, str],
+        max_iterations: int = 10,
+        tools: Optional[List[AgentTool]] = None,
+    ):
         self.llm_client = llm_client
         self.executor = AgentToolExecutor()
         self.memory = ChatMessageMemory()
@@ -372,32 +385,39 @@ class Agent:
         if tools:
             for tool in tools:
                 self.executor.register_tool(tool)
-            self.function_calls = [tool.to_openai_function_call_definition()
-                                 for tool in tools]
+            self.function_calls = [
+                tool.to_openai_function_call_definition() for tool in tools
+            ]
 
     def run(self, user_message: Dict[str, str]):
         """Generates responses, manages tool calls, and updates memory."""
         self.memory.add_message(user_message)
-        direction = router(user_message['content'])
+        direction = router(user_message["content"])
 
         for _ in range(self.max_iterations):
-            if direction == 'websearch':
-                chat_history = [self.system_message] + \
-                    self.memory.get_messages() + self.tool_history
+            if direction == "websearch":
+                chat_history = (
+                    [self.system_message]
+                    + self.memory.get_messages()
+                    + self.tool_history
+                )
                 response = self.llm_client.generate(
-                    chat_history, tools=self.function_calls)
+                    chat_history, tools=self.function_calls
+                )
                 if self.parse_response(response):
                     continue
                 else:
                     self.memory.add_message(
-                        {"role": "assistant", "content": response.content})
+                        {"role": "assistant", "content": response.content}
+                    )
                     self.tool_history = []
                     return response
             else:
                 chat_history = [self.system_message] + self.memory.get_messages()
                 response = self.llm_client.generate(chat_history)
                 self.memory.add_message(
-                    {"role": "assistant", "content": response.content})
+                    {"role": "assistant", "content": response.content}
+                )
                 return response
 
     def parse_response(self, response) -> bool:
@@ -413,49 +433,49 @@ class Agent:
                 try:
                     logger.info(f"Executing {tool_name} with args: {tool_args}")
                     execution_results = self.executor.execute(
-                        tool_name, **tool_args_dict)
-                    self.tool_history.append({
-                        "role": "tool",
-                        "tool_call_id": tool.id,
-                        "name": tool_name,
-                        "content": str(execution_results)
-                    })
+                        tool_name, **tool_args_dict
+                    )
+                    self.tool_history.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool.id,
+                            "name": tool_name,
+                            "content": str(execution_results),
+                        }
+                    )
                 except Exception as e:
                     raise ValueError(
-                        f"Execution error in tool '{tool_name}': {e}") from e
+                        f"Execution error in tool '{tool_name}': {e}"
+                    ) from e
             return True
         return False
 
 
 class GetSearchSchema(BaseModel):
-    """Fetch and process data from Google search based on a query, store results in 
+    """Fetch and process data from Google search based on a query, store results in
     ChromaDB vector store, and retrieve results."""
+
     search_query: str = Field(
-        description="The search query to use for fetching data from Google search")
+        description="The search query to use for fetching data from Google search"
+    )
 
 
-tools = [
-    AgentTool(web_search, GetSearchSchema)
-]
+tools = [AgentTool(web_search, GetSearchSchema)]
 
 # Define the system message
 system_message = {
     "role": "system",
     "content": """
-    You are an AI assistant designed to assist users with their questions and inquiries 
-    across a wide range of topics. Your main focus is to answer the user's most recent 
-    question directly. You have memory to retain relevant information from previous 
+    You are an AI assistant designed to assist users with their questions and inquiries
+    across a wide range of topics. Your main focus is to answer the user's most recent
+    question directly. You have memory to retain relevant information from previous
     interactions, which can help provide more personalized responses if needed.
-    Your goal is to deliver accurate, helpful, and concise answers while maintaining a 
-    friendly and engaging tone. Feel free to sprinkle in some humor and emojis to make 
-    the conversation lively! Always prioritize clarity, relevance, and user satisfaction 
-    in your interactions, utilizing your memory to enhance the user experience when 
+    Your goal is to deliver accurate, helpful, and concise answers while maintaining a
+    friendly and engaging tone. Feel free to sprinkle in some humor and emojis to make
+    the conversation lively! Always prioritize clarity, relevance, and user satisfaction
+    in your interactions, utilizing your memory to enhance the user experience when
     appropriate.
-    """
+    """,
 }
 
-agent = Agent(
-    llm_client=llm,
-    system_message=system_message,
-    tools=tools
-)
+agent = Agent(llm_client=llm, system_message=system_message, tools=tools)
